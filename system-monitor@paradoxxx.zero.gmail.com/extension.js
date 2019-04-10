@@ -1526,7 +1526,7 @@ const Freq = new Lang.Class({
         let total_frequency = 0;
         let num_cpus = GTop.glibtop_get_sysinfo().ncpu;
         let i = 0;
-        let file = Gio.file_new_for_path(`/sys/devices/system/cpu/cpu${i}/cpufreq/scaling_cur_freq`);
+        let file = Gio.file_new_for_path('/sys/devices/system/cpu/cpu${i}/cpufreq/scaling_cur_freq');
         file.load_contents_async(null, Lang.bind(this, function cb (source, result) {
             let as_r = source.load_contents_finish(result);
             total_frequency += parseInt(as_r[1]);
@@ -1534,7 +1534,7 @@ const Freq = new Lang.Class({
             if (++i >= num_cpus) {
                 this.freq = Math.round(total_frequency / num_cpus / 1000);
             } else {
-                file = Gio.file_new_for_path(`/sys/devices/system/cpu/cpu${i}/cpufreq/scaling_cur_freq`);
+                file = Gio.file_new_for_path('/sys/devices/system/cpu/cpu${i}/cpufreq/scaling_cur_freq');
                 file.load_contents_async(null, Lang.bind(this, cb));
             }
         }));
