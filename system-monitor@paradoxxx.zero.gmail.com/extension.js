@@ -1840,7 +1840,7 @@ const Net = new Lang.Class({
     create_text_items: function () {
         return [
             new St.Icon({
-                icon_size: 2 * IconSize / 3 * Style.iconsize(),
+                icon_size: 5 * IconSize / 3 * Style.iconsize(),
                 icon_name: 'go-down-symbolic'}),
             new St.Label({
                 text: '',
@@ -1851,7 +1851,7 @@ const Net = new Lang.Class({
                 style_class: Style.get('sm-net-unit-label'),
                 y_align: Clutter.ActorAlign.CENTER}),
             new St.Icon({
-                icon_size: 2 * IconSize / 3 * Style.iconsize(),
+                icon_size: 5 * IconSize / 3 * Style.iconsize(),
                 icon_name: 'go-up-symbolic'}),
             new St.Label({
                 text: '',
@@ -2429,24 +2429,24 @@ var enable = function () {
         let menu_info = new PopupMenu.PopupBaseMenuItem({reactive: false});
         let menu_info_box = new St.BoxLayout();
         menu_info.actor.add(menu_info_box);
-        Main.__sm.tray.menu.addMenuItem(menu_info, 0);
+        //Main.__sm.tray.menu.addMenuItem(menu_info, 0);
 
         build_menu_info();
 
-        tray.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+        //tray.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
         let pie_item = Main.__sm.pie;
         pie_item.create_menu_item();
-        tray.menu.addMenuItem(pie_item.menu_item);
+        //tray.menu.addMenuItem(pie_item.menu_item);
 
         let bar_item = Main.__sm.bar;
         bar_item.create_menu_item();
-        tray.menu.addMenuItem(bar_item.menu_item);
+        //tray.menu.addMenuItem(bar_item.menu_item);
 
         change_usage();
         Schema.connect('changed::disk-usage-style', change_usage);
 
-        tray.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+        //tray.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
         tray.menu.connect(
             'open-state-changed',
@@ -2474,7 +2474,7 @@ var enable = function () {
         item.connect('activate', function () {
             _gsmApp.activate();
         });
-        tray.menu.addMenuItem(item);
+        //tray.menu.addMenuItem(item);
 
         item = new PopupMenu.PopupMenuItem(_('Preferences...'));
         item.connect('activate', function () {
@@ -2486,7 +2486,7 @@ var enable = function () {
                 info.launch_uris([metadata.uuid], global.create_app_launch_context(timestamp, -1));
             }
         });
-        tray.menu.addMenuItem(item);
+        //tray.menu.addMenuItem(item);
         if (Compat.versionCompare(shell_Version, '3.5.5')) {
             Main.panel.menuManager.addMenu(tray.menu);
         } else {
@@ -2499,7 +2499,7 @@ var enable = function () {
 
 var disable = function () {
     // restore clock
-    if (Main.__sm.tray.clockMoved) {
+    if (Main.__sm.ty.clockMoved) {
         let dateMenu;
         if (Compat.versionCompare(shell_Version, '3.5.90')) {
             dateMenu = Main.panel.statusArea.dateMenu;
