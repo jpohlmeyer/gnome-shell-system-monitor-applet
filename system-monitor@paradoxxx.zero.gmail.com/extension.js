@@ -2353,7 +2353,7 @@ var enable = function () {
                 return true;
             });
     } else {
-        let panel = Main.panel._centerBox;
+        let panel = Main.panel._rightBox;
         StatusArea = Main.panel._statusArea;
         if (typeof (StatusArea) === 'undefined') {
             StatusArea = Main.panel.statusArea;
@@ -2412,7 +2412,7 @@ var enable = function () {
             panel.insert_child_at_index(tray.actor, 1);
             panel.child_set(tray.actor, {y_fill: true});
         } else {
-            Main.panel._addToPanelBox('system-monitor', tray, 1, panel);
+            Main.panel._addToPanelBox('system-monitor', tray, 0, panel);
         }
 
         // The spacing adds a distance between the graphs/text on the top bar
