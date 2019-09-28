@@ -2353,7 +2353,7 @@ var enable = function () {
                 return true;
             });
     } else {
-        let panel = Main.panel._rightBox;
+        let panel = Main.panel._centerBox;
         StatusArea = Main.panel._statusArea;
         if (typeof (StatusArea) === 'undefined') {
             StatusArea = Main.panel.statusArea;
