@@ -2442,8 +2442,8 @@ function enable() {
                 info.launch_uris([metadata.uuid], global.create_app_launch_context(timestamp, -1));
             }
         });
-        tray.menu.addMenuItem(item);
-        Main.panel.menuManager.addMenu(tray.menu);
+        //tray.menu.addMenuItem(item);
+        //Main.panel.menuManager.addMenu(tray.menu);
     }
     log('[System monitor] applet enabling done');
 }
