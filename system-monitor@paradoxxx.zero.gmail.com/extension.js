@@ -29,12 +29,14 @@ var smDepsNM = true;
 var Config = imports.misc.config;
 var Clutter = imports.gi.Clutter;
 var GLib = imports.gi.GLib;
+var GObject = imports.gi.GObject;
 var Lang = imports.lang;
 
 var Gio = imports.gi.Gio;
 var Shell = imports.gi.Shell;
 var St = imports.gi.St;
-var Power = imports.ui.status.power;
+const UPower = imports.gi.UPowerGlib;
+
 // const System = imports.system;
 var ModalDialog = imports.ui.modalDialog;
 
@@ -89,6 +91,21 @@ let extension = imports.misc.extensionUtils.getCurrentExtension();
 let metadata = extension.metadata;
 let shell_Version = Config.PACKAGE_VERSION;
 
+Clutter.Actor.prototype.raise_top = function raise_top() {
+    const parent = this.get_parent();
+    if (!parent) {
+        return;
+    }
+    parent.set_child_above_sibling(this, null);
+}
+Clutter.Actor.prototype.reparent = function reparent(newParent) {
+    const parent = this.get_parent();
+    if (parent) {
+        parent.remove_child(this);
+    }
+    newParent.add_child(this);
+}
+
 function l_limit(t) {
     return (t > 0) ? t : 1000;
 }
@@ -119,7 +136,7 @@ function build_menu_info() {
 
     let menu_info_box_table = new St.Widget({
         style: 'padding: 10px 0px 10px 0px; spacing-rows: 10px; spacing-columns: 15px;',
-        layout_manager: new Clutter.TableLayout()
+        layout_manager: new Clutter.GridLayout({orientation: Clutter.Orientation.VERTICAL})
     });
     let menu_info_box_table_layout = menu_info_box_table.layout_manager;
 
@@ -131,23 +148,30 @@ function build_menu_info() {
         }
 
         // Add item name to table
-        menu_info_box_table_layout.pack(
+        menu_info_box_table_layout.attach(
             new St.Label({
                 text: elts[elt].item_name,
-                style_class: Style.get('sm-title')}), 0, row_index);
+                style_class: Style.get('sm-title'),
+                x_align: Clutter.ActorAlign.START,
+                y_align: Clutter.ActorAlign.CENTER
+            }), 0, row_index, 1, 1);
 
         // Add item data to table
         let col_index = 1;
         for (let item in elts[elt].menu_items) {
-            menu_info_box_table_layout.pack(
-                elts[elt].menu_items[item], col_index, row_index);
+            menu_info_box_table_layout.attach(
+                elts[elt].menu_items[item], col_index, row_index, 1, 1);
 
             col_index++;
         }
 
         row_index++;
     }
-    tray_menu._getMenuItems()[0].actor.get_last_child().add(menu_info_box_table, {expand: true});
+    if (shell_Version < '3.36') {
+        tray_menu._getMenuItems()[0].actor.get_last_child().add(menu_info_box_table, {expand: true});
+    } else {
+        tray_menu._getMenuItems()[0].actor.get_last_child().add_child(menu_info_box_table);
+    }
 }
 
 function change_menu() {
@@ -362,6 +386,9 @@ const Chart = class SystemMonitor_Chart {
         if (old_width === this.width) {
             return;
         }
+        if (Style.get('') === '-compact') {
+            this.width = Math.round(this.width / 1.5);
+        }
         this.actor.set_width(this.width);
         if (this.width < this.data[0].length) {
             for (let i = 0; i < this.parentC.colors.length; i++) {
@@ -517,7 +544,11 @@ const Graph = class SystemMonitor_Graph {
     }
     create_menu_item() {
         this.menu_item = new PopupMenu.PopupBaseMenuItem({reactive: false});
-        this.menu_item.actor.add(this.actor, {span: -1, expand: true});
+        if (shell_Version < '3.36') {
+            this.menu_item.actor.add(this.actor, {span: -1, expand: true});
+        } else {
+            this.menu_item.actor.add_child(this.actor);
+        }
         // tray.menu.addMenuItem(this.menu_item);
     }
     show(visible) {
@@ -630,15 +661,32 @@ const Pie = class SystemMonitor_Pie extends Graph {
     }
 }
 
-const TipItem = class SystemMonitor_TipItem extends PopupMenu.PopupBaseMenuItem {
-    constructor() {
-        super();
-        // PopupMenu.PopupBaseMenuItem.prototype._init.call(this);
-        this.actor.remove_style_class_name('popup-menu-item');
-        this.actor.add_style_class_name('sm-tooltip-item');
-    }
-}
+var TipItem = null;
 
+if (shell_Version < '3.36') {
+    var TipItem = class SystemMonitor_TipItem extends PopupMenu.PopupBaseMenuItem {
+        constructor() {
+            super();
+            // PopupMenu.PopupBaseMenuItem.prototype._init.call(this);
+            this.actor.remove_style_class_name('popup-menu-item');
+            this.actor.add_style_class_name('sm-tooltip-item');
+        }
+    }
+} else {
+    var TipItem = GObject.registerClass(
+        {
+            GTypeName: 'TipItem'
+        },
+        class TipItem extends PopupMenu.PopupBaseMenuItem {
+            _init() {
+                super._init();
+                // PopupMenu.PopupBaseMenuItem.prototype._init.call(this);
+                this.actor.remove_style_class_name('popup-menu-item');
+                this.actor.add_style_class_name('sm-tooltip-item');
+            }
+        }
+    );
+}
 const TipMenu = class SystemMonitor_TipMenu extends PopupMenu.PopupMenuBase {
     constructor(sourceActor) {
         // PopupMenu.PopupMenuBase.prototype._init.call(this, sourceActor, 'sm-tooltip-box');
@@ -922,7 +970,9 @@ const ElementBase = class SystemMonitor_ElementBase extends TipBox {
         }
         this.chart.update();
         for (let i = 0; i < this.tip_vals.length; i++) {
-            this.tip_labels[i].text = this.tip_vals[i].toString();
+            if (this.tip_labels[i]) {
+                this.tip_labels[i].text = this.tip_vals[i].toString();
+            }
         }
         return true;
     }
@@ -988,7 +1038,7 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
         let isBattery = false;
         if (typeof (this._proxy.GetDevicesRemote) === 'undefined') {
             let device_type = this._proxy.Type;
-            isBattery = (device_type === Power.UPower.DeviceKind.BATTERY);
+            isBattery = (device_type === UPower.DeviceKind.BATTERY);
             if (isBattery) {
                 battery_found = true;
                 let icon = this._proxy.IconName;
@@ -1015,7 +1065,7 @@ const Battery = class SystemMonitor_Battery extends ElementBase {
                 for (let i = 0; i < result.length; i++) {
                     let [device_id, device_type, icon, percentage, state, seconds] = result[i];
 
-                    isBattery = (device_type === Power.UPower.DeviceKind.BATTERY);
+                    isBattery = (device_type === UPower.DeviceKind.BATTERY);
                     if (isBattery) {
                         battery_found = true;
                         this.update_battery_value(seconds, percentage, icon);
@@ -1381,27 +1431,32 @@ const Disk = class SystemMonitor_Disk extends ElementBase {
     }
     refresh() {
         let accum = [0, 0];
-        let lines = Shell.get_file_contents_utf8_sync('/proc/diskstats').split('\n');
 
-        for (let i = 0; i < lines.length; i++) {
-            let line = lines[i];
-            let entry = line.trim().split(/[\s]+/);
-            if (typeof (entry[1]) === 'undefined') {
-                break;
-            }
-            accum[0] += parseInt(entry[5]);
-            accum[1] += parseInt(entry[9]);
-        }
+        let file = Gio.file_new_for_path('/proc/diskstats');
+        file.load_contents_async(null, (source, result) => {
+            let as_r = source.load_contents_finish(result);
+            let lines = String(as_r[1]).split('\n');
 
-        let time = GLib.get_monotonic_time() / 1000;
-        let delta = (time - this.last_time) / 1000;
-        if (delta > 0) {
-            for (let i = 0; i < 2; i++) {
-                this.usage[i] = ((accum[i] - this.last[i]) / delta / 1024 / 8);
-                this.last[i] = accum[i];
+            for (let i = 0; i < lines.length; i++) {
+                let line = lines[i];
+                let entry = line.trim().split(/[\s]+/);
+                if (typeof (entry[1]) === 'undefined') {
+                    break;
+                }
+                accum[0] += parseInt(entry[5]);
+                accum[1] += parseInt(entry[9]);
             }
-        }
-        this.last_time = time;
+
+            let time = GLib.get_monotonic_time() / 1000;
+            let delta = (time - this.last_time) / 1000;
+            if (delta > 0) {
+                for (let i = 0; i < 2; i++) {
+                    this.usage[i] = ((accum[i] - this.last[i]) / delta / 1024 / 8);
+                    this.last[i] = accum[i];
+                }
+            }
+            this.last_time = time;
+        });
     }
     _apply() {
         this.vals = this.usage.slice();
@@ -1962,7 +2017,7 @@ const Thermal = class SystemMonitor_Thermal extends ElementBase {
             let file = Gio.file_new_for_path(sfile);
             file.load_contents_async(null, (source, result) => {
                 let as_r = source.load_contents_finish(result)
-                this.temperature = Math.round(parseInt(as_r[1]) / 1000);
+                this.temperature = Math.round(parseInt(ByteArray.toString(as_r[1])) / 1000);
                 if (this.fahrenheit_unit) {
                     this.temperature = Math.round(this.temperature * 1.8 + 32);
                 }
@@ -2033,7 +2088,7 @@ const Fan = class SystemMonitor_Fan extends ElementBase {
             let file = Gio.file_new_for_path(sfile);
             file.load_contents_async(null, (source, result) => {
                 let as_r = source.load_contents_finish(result)
-                this.rpm = parseInt(as_r[1]);
+                this.rpm = parseInt(ByteArray.toString(as_r[1]));
             });
         } else if (this.display_error) {
             global.logError('error reading: ' + sfile);
@@ -2312,7 +2367,11 @@ function enable() {
         // The spacing adds a distance between the graphs/text on the top bar
         let spacing = Schema.get_boolean('compact-display') ? '1' : '4';
         let box = new St.BoxLayout({style: 'spacing: ' + spacing + 'px;'});
-        tray.actor.add_actor(box);
+        if (shell_Version < '3.36') {
+            tray.actor.add_actor(box);
+        } else {
+            tray.add_actor(box);
+        }
         box.add_actor(Main.__sm.icon.actor);
         // Add items to panel box
         for (let elt in elts) {
@@ -2363,6 +2422,9 @@ function enable() {
         let _appSys = Shell.AppSystem.get_default();
         let _gsmApp = _appSys.lookup_app('gnome-system-monitor.desktop');
         let _gsmPrefs = _appSys.lookup_app('gnome-shell-extension-prefs.desktop');
+        if (_gsmPrefs === null) {
+            _gsmPrefs = _appSys.lookup_app('org.gnome.Extensions.desktop');
+        }
         let item;
         item = new PopupMenu.PopupMenuItem(_('System Monitor...'));
         item.connect('activate', () => {
@@ -2416,8 +2478,11 @@ function disable() {
     for (let eltName in Main.__sm.elts) {
         Main.__sm.elts[eltName].destroy();
     }
-
-    Main.__sm.tray.actor.destroy();
+    if (shell_Version < '3.36') {
+        Main.__sm.tray.actor.destroy();
+    } else {
+        Main.__sm.tray.destroy();
+    }
     Main.__sm = null;
 
     log('[System monitor] applet disable');
